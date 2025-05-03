@@ -1,0 +1,11 @@
+{
+    "nrf-connect.applications": [
+        "${workspaceFolder}"
+    ],
+    "files.associations": {
+        "hci.h": "c",
+        "uart_async_adapter.h": "c",
+        "uart.h": "c",
+        "usb_device.h": "c"
+    }
+}
