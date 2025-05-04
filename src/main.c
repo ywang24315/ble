@@ -31,7 +31,13 @@
 #include <stdio.h>
 #include <string.h>
 
+//add int
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+
+//add blood pressure services
+#define BT_UUID_BLOOD_PRESSURE         BT_UUID_DECLARE_16(0x1810)
+#define BT_UUID_BLOOD_PRESSURE_MEAS    BT_UUID_DECLARE_16(0x2A35)
 
 #define LOG_MODULE_NAME peripheral_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
@@ -59,10 +65,26 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define BT_UUID_RACP_VAL 0x2A52
 #define BT_UUID_RACP BT_UUID_DECLARE_16(BT_UUID_RACP_VAL)
 
-/* 模擬數據 */
+//中斷
+#define BUTTON_NODE DT_ALIAS(sw1)  // 使用 devicetree 定義的按鈕（例如 P0.13）
+#define SW1_PIN 13  // P0.13
+#define SW1_PORT "GPIO_0"
+
+
+/* Simulate Battery's data */
 static uint8_t battery_level = 100;
 static uint8_t battery_state = 0b00000110;	// Charging, Good health
 static uint8_t battery_status = 0b00000000; // No alarms
+
+// Simulate blood pressure（mmHg, 120/80）
+static uint8_t bp_data[] = {
+    0x00,  // Flags
+    120, 0, // Systolic
+    80, 0,  // Diastolic
+    100, 0, // MAP (mean arterial pressure)
+    0, 0,   // Time Stamp (optional)
+};
+
 
 static void battery_level_update(struct k_timer *dummy);
 static struct k_timer battery_timer;
@@ -79,16 +101,21 @@ static const char manufacturer_name_str[] = "Dynapack";
 static const char model_number_str[] = "Model-1234";
 static const char serial_number_str[] = "SN-56789";
 
-static uint8_t racp_data[20]; // 可根據需求擴大
+// button
+const struct device *sw1_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+
+static uint8_t racp_data[20]; // �i�ھڻݨD�X�j
 
 // Battery Health Status
-static uint16_t cycle_count = 120;				  // 0x78	-> 7800
-static int8_t battery_temp = 32;				  // 32	->20
-static uint8_t soh = 95;						  // percent	5F
-static uint16_t remaining_capacity = 2500;		  // mAh	9C4
-static uint16_t estimated_runtime = 180;		  // minutes	B4
-static uint8_t battery_level_state = 0b00000011;  // 假設: idle + discharging
-static uint8_t battery_level_status = 0b00000110; // 假設: low power + charging
+static uint16_t cycle_count = 120;		   // 0x78	-> 7800
+static int8_t battery_temp = 32;		   // 32	->20
+static uint8_t soh = 95;				   // percent	5F
+static uint16_t remaining_capacity = 2500; // mAh	9C4
+static uint16_t estimated_runtime = 180;   // minutes	B4
+
+//中斷
+static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET_OR(BUTTON_NODE, gpios, {0});
+static struct gpio_callback sw1_cb_data;
 
 static ssize_t write_racp(struct bt_conn *conn,
 						  const struct bt_gatt_attr *attr,
@@ -102,10 +129,10 @@ static ssize_t write_racp(struct bt_conn *conn,
 	}
 	printk("\n");
 
-	// 這裡可以解析 opcode & operator，實作邏輯
-	// Ex: racp_data[0] 是 opcode，racp_data[1] 是 operator
+	// �o�̥i�H�ѪR opcode & operator�A��@�޿�
+	// Ex: racp_data[0] �O opcode�Aracp_data[1] �O operator
 
-	// 回應用的 Indicate 請參考 bt_gatt_indicate()
+	// �^���Ϊ� Indicate �аѦ� bt_gatt_indicate()
 
 	return len;
 }
@@ -730,50 +757,34 @@ static ssize_t read_u16(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, attr->user_data, sizeof(uint16_t));
 }
 
-static ssize_t read_battery_level_state(struct bt_conn *conn,
-										const struct bt_gatt_attr *attr,
-										void *buf, uint16_t len, uint16_t offset)
+static ssize_t read_bp(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+	void *buf, uint16_t len, uint16_t offset)
 {
-	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 &battery_level_state, sizeof(battery_level_state));
+return bt_gatt_attr_read(conn, attr, buf, len, offset, bp_data, sizeof(bp_data));
 }
 
-static ssize_t read_battery_level_status(struct bt_conn *conn,
-										 const struct bt_gatt_attr *attr,
-										 void *buf, uint16_t len, uint16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 &battery_level_status, sizeof(battery_level_status));
-}
+/* GATT Service �w�q */
+#if 0
+BT_GATT_SERVICE_DEFINE(battery_svc,
+					   BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
+					   BT_GATT_CHARACTERISTIC(BT_UUID_BAS_BATTERY_LEVEL,
+											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+											  BT_GATT_PERM_READ,
+											  read_battery_level, NULL, NULL),
+					   BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 
-// SoH
-static ssize_t read_soh(struct bt_conn *conn,
-						const struct bt_gatt_attr *attr,
-						void *buf, uint16_t len, uint16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 &soh, sizeof(soh));
-}
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1A, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_battery_state, NULL, NULL),
 
-// Remaining Capacity
-static ssize_t read_remaining_capacity(struct bt_conn *conn,
-									   const struct bt_gatt_attr *attr,
-									   void *buf, uint16_t len, uint16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 &remaining_capacity, sizeof(remaining_capacity));
-}
-
-// Estimated Runtime
-static ssize_t read_estimated_runtime(struct bt_conn *conn,
-									  const struct bt_gatt_attr *attr,
-									  void *buf, uint16_t len, uint16_t offset)
-{
-	return bt_gatt_attr_read(conn, attr, buf, len, offset,
-							 &estimated_runtime, sizeof(estimated_runtime));
-}
-
-/* GATT Service 定義 */
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1B, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_battery_status, NULL, NULL));
+#endif
 
 // BT_GATT_SERVICE_DEFINE(dis_svc,
 BT_GATT_SERVICE_DEFINE(battery_svc,
@@ -789,47 +800,17 @@ BT_GATT_SERVICE_DEFINE(battery_svc,
 											  BT_GATT_PERM_WRITE,
 											  NULL, write_racp, racp_data),
 					   BT_GATT_CCC(racp_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2A1A), // Battery Level State
-											  BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
-											  read_battery_level_state, NULL, NULL),
-
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2A1B), // Battery Level Status
-											  BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
-											  read_battery_level_status, NULL, NULL),
-
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x01, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1A, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
 																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
-											  BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
-											  read_soh, NULL, NULL), // SoH
-
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x02, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
-																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
-											  BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
-											  read_remaining_capacity, NULL, NULL), // Remaining Capacity
-
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x03, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
-																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
-											  BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
-											  read_estimated_runtime, NULL, NULL), // Estimated Runtime
-
-					   //    BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1A, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
-					   // 											  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
-					   // 						  BT_GATT_CHRC_READ,
-					   // 						  BT_GATT_PERM_READ,
-					   // 						  read_u16, NULL, &cycle_count),
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2A20), // cycle Count
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_u16, NULL, &cycle_count),
-					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2A21), // battery_temp
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1B, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_u16, NULL, &battery_temp),
+
 					   BT_GATT_CHARACTERISTIC(BT_UUID_DIS_MANUFACTURER_NAME,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
@@ -849,7 +830,7 @@ static void battery_level_update(struct k_timer *dummy)
 {
 	bt_gatt_notify(NULL, &battery_svc.attrs[1], &battery_level, sizeof(battery_level));
 	printk("Battery level updated: %d%%\n", battery_level);
-	uart_report_battery_info();
+
 	if (battery_level > 0)
 	{
 		battery_level--;
@@ -872,22 +853,30 @@ static void battery_level_update(struct k_timer *dummy)
 
 void battery_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
-	// 可以留空，或根據需要開關notify
+	// �i�H�d�šA�ήھڻݭn�}��notify
 }
 
-void uart_report_battery_info(void)
+BT_GATT_SERVICE_DEFINE(bp_svc,
+    BT_GATT_PRIMARY_SERVICE(BT_UUID_BLOOD_PRESSURE),
+    BT_GATT_CHARACTERISTIC(BT_UUID_BLOOD_PRESSURE_MEAS,
+                           BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_READ,
+                           BT_GATT_PERM_READ,
+                           read_bp, NULL, NULL),
+);
+
+//中斷
+// 中斷處理函數
+void button_pressed_isr(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-	printk("SOH: %d%%\n", soh);
-	printk("Remaining Capacity: %d mAh\n", remaining_capacity);
-	printk("Estimated Runtime: %d min\n", estimated_runtime);
-	printk("Battery Level State: %02X\n", battery_level_state);
-	printk("Battery Level Status: %02X\n", battery_level_status);
+    printk("中斷觸發！按鈕被按下！\n");
 }
+
 
 int main(void)
 {
 	int blink_status = 0;
 	int err = 0;
+    int ret;
 
 	configure_gpio();
 
@@ -944,11 +933,40 @@ int main(void)
 		return 0;
 	}
 
-	printk("Cycle Count value: %d\n", cycle_count);
+	//printk("Cycle Count value: %d\n", cycle_count);
+
+	#pragma region 
+    if (!device_is_ready(button.port)) {
+        printk("按鈕 GPIO 不可用！\n");
+        return;
+    }
+
+    ret = gpio_pin_configure_dt(&button, GPIO_INPUT);
+    if (ret != 0) {
+        printk("設定按鈕 GPIO 輸入失敗\n");
+        return;
+    }
+
+    ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_TO_ACTIVE);  // 邊緣觸發（按下）
+    if (ret != 0) {
+        printk("設定中斷失敗\n");
+        return;
+    }
+
+    // gpio_init_callback(&button_cb_data, button_pressed_isr, BIT(button.pin));
+    // gpio_add_callback(button.port, &button_cb_data);
+    gpio_pin_configure(sw1_dev, SW1_PIN, GPIO_INPUT | GPIO_PULL_UP);
+    gpio_pin_interrupt_configure(sw1_dev, SW1_PIN, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&sw1_cb_data, button_pressed_isr, BIT(SW1_PIN));
+    gpio_add_callback(sw1_dev, &sw1_cb_data);
+
+
+    printk("初始化完成，等待中斷...\n");
+	#pragma endregion
 
 	k_timer_init(&battery_timer, battery_level_update, NULL);
 	k_timer_start(&battery_timer, BATTERY_UPDATE_INTERVAL, BATTERY_UPDATE_INTERVAL);
-
+	
 	for (;;)
 	{
 		dk_set_led(RUN_STATUS_LED, (++blink_status) % 2);
