@@ -31,12 +31,17 @@
 #include <stdio.h>
 #include <string.h>
 
+<<<<<<< HEAD
 //add int
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
 
 
+=======
+#include <zephyr/logging/log.h>
+
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 #define LOG_MODULE_NAME peripheral_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
@@ -58,6 +63,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define UART_WAIT_FOR_BUF_DELAY K_MSEC(50)
 #define UART_WAIT_FOR_RX CONFIG_BT_NUS_UART_RX_WAIT_TIME
 
+<<<<<<< HEAD
 #define BATTERY_UPDATE_INTERVAL K_SECONDS(10)
 
 #define BT_UUID_RACP_VAL 0x2A52
@@ -70,6 +76,9 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 
 /* �����ƾ� */
+=======
+/* 模擬數據 */
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 static uint8_t battery_level = 100;
 static uint8_t battery_state = 0b00000110;	// Charging, Good health
 static uint8_t battery_status = 0b00000000; // No alarms
@@ -85,6 +94,7 @@ static struct bt_conn *auth_conn;
 static const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(nordic_nus_uart));
 static struct k_work_delayable uart_work;
 
+<<<<<<< HEAD
 static const char manufacturer_name_str[] = "Dynapack";
 static const char model_number_str[] = "Model-1234";
 static const char serial_number_str[] = "SN-56789";
@@ -130,6 +140,8 @@ static void racp_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	printk("RACP indication %s\n", value == BT_GATT_CCC_INDICATE ? "enabled" : "disabled");
 }
 
+=======
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 struct uart_data_t
 {
 	void *fifo_reserved;
@@ -709,9 +721,13 @@ static void configure_gpio(void)
 static ssize_t read_battery_level(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 								  void *buf, uint16_t len, uint16_t offset)
 {
+<<<<<<< HEAD
 	const uint8_t *value = &battery_level;
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, value, sizeof(*value));
 	// return bt_gatt_attr_read(conn, attr, buf, len, offset, &battery_level, sizeof(battery_level));
+=======
+	return bt_gatt_attr_read(conn, attr, buf, len, offset, &battery_level, sizeof(battery_level));
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 }
 
 static ssize_t read_battery_state(struct bt_conn *conn, const struct bt_gatt_attr *attr,
@@ -726,6 +742,7 @@ static ssize_t read_battery_status(struct bt_conn *conn, const struct bt_gatt_at
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, &battery_status, sizeof(battery_status));
 }
 
+<<<<<<< HEAD
 static ssize_t read_str(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len,
 						uint16_t offset)
 {
@@ -749,12 +766,32 @@ static ssize_t read_u16(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 #if 0
 BT_GATT_SERVICE_DEFINE(battery_svc,
 					   BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
+=======
+/* GATT Service 定義 */
+/*
+BT_GATT_SERVICE_DEFINE(battery_svc,
+					   BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
+
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 					   BT_GATT_CHARACTERISTIC(BT_UUID_BAS_BATTERY_LEVEL,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  read_battery_level, NULL, NULL),
+<<<<<<< HEAD
 					   BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 
+=======
+
+					   BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+					   BT_GATT_DESCRIPTOR(BT_UUID_GATT_CPF, BT_GATT_PERM_READ,
+										  bt_gatt_attr_read_cpf, NULL, &(struct bt_gatt_cpf){.format = 0x04, // percent (unitless)
+																							 .exponent = 0,
+																							 .unit = 0x27AD, // percentage
+																							 .name_space = 1,
+																							 .description = 0x0100}),
+
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x1A, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
 																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
 											  BT_GATT_CHRC_READ,
@@ -766,6 +803,7 @@ BT_GATT_SERVICE_DEFINE(battery_svc,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_battery_status, NULL, NULL));
+<<<<<<< HEAD
 #endif
 
 // BT_GATT_SERVICE_DEFINE(dis_svc,
@@ -807,6 +845,8 @@ BT_GATT_SERVICE_DEFINE(battery_svc,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_str, NULL, serial_number_str));
+=======
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 
 static void battery_level_update(struct k_timer *dummy)
 {
@@ -822,6 +862,7 @@ static void battery_level_update(struct k_timer *dummy)
 		battery_level = 100;
 	}
 }
+<<<<<<< HEAD
 
 /* BT_GATT_SERVICE_DEFINE(battery_svc,
 					   BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
@@ -845,12 +886,18 @@ void button_pressed_isr(const struct device *dev, struct gpio_callback *cb, uint
     printk("中斷觸發！按鈕被按下！\n");
 }
 
+=======
+*/
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 
 int main(void)
 {
 	int blink_status = 0;
 	int err = 0;
+<<<<<<< HEAD
     int ret;
+=======
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 
 	configure_gpio();
 
@@ -907,6 +954,7 @@ int main(void)
 		return 0;
 	}
 
+<<<<<<< HEAD
 	//printk("Cycle Count value: %d\n", cycle_count);
 
 	#pragma region 
@@ -941,6 +989,8 @@ int main(void)
 	k_timer_init(&battery_timer, battery_level_update, NULL);
 	k_timer_start(&battery_timer, BATTERY_UPDATE_INTERVAL, BATTERY_UPDATE_INTERVAL);
 	
+=======
+>>>>>>> 11700f791b0c72e93954c4c74b78ef19804cbf24
 	for (;;)
 	{
 		dk_set_led(RUN_STATUS_LED, (++blink_status) % 2);
