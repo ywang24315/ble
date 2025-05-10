@@ -59,6 +59,20 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define BT_UUID_RACP_VAL 0x2A52
 #define BT_UUID_RACP BT_UUID_DECLARE_16(BT_UUID_RACP_VAL)
 
+// Battery information
+// #define BATTERY_INFO_SERVICE_UUID 0x1600
+#define CHAR_UUID_MANUFACTURE_DATE 0x1601
+#define CHAR_UUID_EXPIRATION_DATE 0x1602
+#define BATTERY_MANUFACTURE_UUID                    \
+	0x02, 0x00, 0x12, 0x34, 0x78, 0x56, 0x34, 0x12, \
+		0x78, 0x56, 0x34, 0x12, 0xBC, 0x9A, 0xDE, 0xF0
+#define CHAR_UUID_DESIGNED_CAPACITY 0x1603
+#define CHAR_UUID_LOW_ENERGY 0x1604
+#define CHAR_UUID_CRITICAL_ENERGY 0x1605
+#define CHAR_UUID_NOMINAL_VOLTAGE 0x1607
+#define CHAR_UUID_AGGREGATION_GROUP 0x1608
+#define CHAR_UUID_CHEMISTRY 0x1609
+
 /* 模擬數據 */
 static uint8_t battery_level = 100;
 static uint8_t battery_state = 0b00000110;	// Charging, Good health
@@ -89,6 +103,16 @@ static uint16_t remaining_capacity = 2500;		  // mAh	9C4
 static uint16_t estimated_runtime = 180;		  // minutes	B4
 static uint8_t battery_level_state = 0b00000011;  // 假設: idle + discharging
 static uint8_t battery_level_status = 0b00000110; // 假設: low power + charging
+
+// Battery Information
+static uint8_t manufacture_date[] = "2024-05-01";
+static uint8_t expiration_date[] = "2029-05-01";
+static uint16_t designed_capacity = 3000; // mAh
+static uint16_t low_energy = 300;		  // mWh	//012C
+static uint16_t critical_energy = 100;	  // mWh
+static const char chemistry[] = "Li-ion"; // Parsing Question
+static uint16_t nominal_voltage = 3700;	  // mV
+static uint8_t aggregation_group = 1;	  // Group ID
 
 static ssize_t write_racp(struct bt_conn *conn,
 						  const struct bt_gatt_attr *attr,
@@ -830,6 +854,60 @@ BT_GATT_SERVICE_DEFINE(battery_svc,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_u16, NULL, &battery_temp),
+
+					   // Manufacture date
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(BATTERY_MANUFACTURE_UUID),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u16, NULL, manufacture_date),
+
+					   // Expiration date
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1601),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u8, NULL, expiration_date),
+
+					   // Designed capacity
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1605),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u16, NULL, &designed_capacity),
+
+					   // Low energy threshold
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1604),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u16, NULL, &low_energy),
+
+					   // Critical energy
+					   //   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1605),
+					   // 					  BT_GATT_CHRC_READ,
+					   // 					  BT_GATT_PERM_READ,
+					   // 					  read_u16, NULL, &critical_energy),
+
+					   //    // Chemistry
+					   //    BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(BATTERY_CHEMISTRY_UUID),
+					   // 						  BT_GATT_CHRC_READ,
+					   // 						  BT_GATT_PERM_READ,
+					   // 						  NULL, NULL, chemistry),
+
+					   // Nominal voltage
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1607),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u16, NULL, &nominal_voltage),
+
+					   // Aggregation group
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1608),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_u16, NULL, &aggregation_group),
+					   // Chemistry
+					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x1609),
+											  BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  read_str, NULL, chemistry),
+
 					   BT_GATT_CHARACTERISTIC(BT_UUID_DIS_MANUFACTURER_NAME,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
