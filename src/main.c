@@ -73,6 +73,9 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define CHAR_UUID_AGGREGATION_GROUP 0x1608
 #define CHAR_UUID_CHEMISTRY 0x1609
 
+//Battery Critical
+#define BATTERY_CRITICAL_UUID       0x2BE9
+
 /* 模擬數據 */
 static uint8_t battery_level = 100;
 static uint8_t battery_state = 0b00000110;	// Charging, Good health
@@ -113,6 +116,13 @@ static uint16_t critical_energy = 100;	  // mWh
 static const char chemistry[] = "Li-ion"; // Parsing Question
 static uint16_t nominal_voltage = 3700;	  // mV
 static uint8_t aggregation_group = 1;	  // Group ID
+
+// Battery Critical
+static uint16_t battery_critical_status=400;
+
+
+
+
 
 static ssize_t write_racp(struct bt_conn *conn,
 						  const struct bt_gatt_attr *attr,
@@ -770,6 +780,14 @@ static ssize_t read_battery_level_status(struct bt_conn *conn,
 							 &battery_level_status, sizeof(battery_level_status));
 }
 
+ssize_t read_battery_critical(struct bt_conn *conn,
+                              const struct bt_gatt_attr *attr,
+                              void *buf, uint16_t len,
+                              uint16_t offset)
+{
+    const uint16_t *value = attr->user_data;
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, value, sizeof(*value));
+}
 // SoH
 static ssize_t read_soh(struct bt_conn *conn,
 						const struct bt_gatt_attr *attr,
@@ -822,6 +840,12 @@ BT_GATT_SERVICE_DEFINE(battery_svc,
 											  BT_GATT_CHRC_READ,
 											  BT_GATT_PERM_READ,
 											  read_battery_level_status, NULL, NULL),
+
+					    BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2BE9),
+							   				BT_GATT_CHRC_READ,
+											BT_GATT_PERM_READ,
+                           					read_battery_critical, NULL, &battery_critical_status),
+						   
 
 					   BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_128(0x01, 0xA1, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
 																  0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB),
